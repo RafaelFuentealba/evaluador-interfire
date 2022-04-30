@@ -1,0 +1,93 @@
+$('#btn-modal').click();
+	$('#response-put-marker').css({ 'display':'none' });
+	$('#response-get-information').css({ 'display':'block' });
+
+	let center = marker.getLatLng();
+	let riesgo = 0;
+
+	$.ajax({
+		url: window.location.origin + '/riesgo/vivienda',
+		method: 'POST',
+		data: { "longitude-zone": center.lng, "latitude-zone": center.lat },
+		success: function (response) {
+			console.log(response);
+			$('#btn-close-window').click();
+
+			/** variables to prevalencia */
+			let inc_quin_mean = 0;
+			let inc_actual = 0;
+			let inc_years = 0;
+			let inc_percentage_dif = 0;
+			let sup_quin_mean = 0;
+			let sup_actual = 0;
+			let sup_years = 0;
+			let sup_percentage_dif = 0;
+			let res_prevalence = 0;
+
+			/** variables to pendiente */
+			let res_pendiente = 0;
+
+			/** variables to vegetación combustible */
+			let res_combustible = 0;
+
+			/** calculates prevalencia */
+			for (let key in response['incendios']) {
+				if (key != 'inc_2020') {
+					inc_quin_mean += parseInt(response['incendios'][key]);
+					inc_years += 1;
+				} else {
+					inc_actual += parseInt(response['incendios'][key]);
+				}
+			}
+
+			for (let key in response['superficie']) {
+				if (key != 'sup_2020') {
+					sup_quin_mean += parseFloat(response['superficie'][key]);
+					sup_years += 1;
+				} else {
+					sup_actual += parseFloat(response['superficie'][key]);
+				}
+			}
+			
+			inc_quin_mean = inc_quin_mean / inc_years;
+			if (inc_quin_mean == 0) inc_percentage_dif = 0;
+			else inc_percentage_dif = Math.round(((inc_actual - inc_quin_mean) / inc_quin_mean) * 100);
+			sup_quin_mean = sup_quin_mean / sup_years;
+			if (sup_quin_mean == 0) sup_percentage_dif = 0;
+			else sup_percentage_dif = Math.round(((sup_actual - sup_quin_mean) / sup_quin_mean) * 100);
+			res_prevalence = getPrevalenceScore(inc_percentage_dif, sup_percentage_dif);
+			
+			/** calculates pendiente */
+			for (let key in response['pendiente']) {
+				if (response['pendiente'][key]['gridcode'] == 1) res_pendiente = 0;
+				else if (response['pendiente'][key]['gridcode'] == 2) res_pendiente = 50;
+				else if (response['pendiente'][key]['gridcode'] == 3) res_pendiente = 100;
+			}
+
+			/** calculates vegetacion combustible */
+			for (let key in response['combustible']) {
+				res_combustible = res_combustible + ((parseInt(response['combustible'][key]['puntaje']) * parseFloat(response['combustible'][key]['pc_superficie'])) / 100);
+			}
+			res_combustible = Math.round(res_combustible);
+						
+			if (res_pendiente == null) res_pendiente = 0;
+			if (res_combustible == null) res_combustible = 0;
+
+			amenaza = Math.round(0.5*res_prevalence + 0.25*res_pendiente + 0.25*res_combustible);
+			//vulnerabilidad = 0;
+			if (amenaza < 0) amenaza = 0;
+			//if (vulnerabilidad < 0) vulnerabilidad = 0;
+			//riesgo = Math.round(0.3*amenaza + 0.7*vulnerabilidad);
+			riesgo = Math.round(amenaza);
+			if (riesgo < 0) riesgo = 0;
+
+			marker.bindPopup(
+				'<div class="text-center">' +
+					'Riesgo: ' + riesgo +
+				'</div>'
+			).openPopup();
+		},
+		error: function(jqXHR, textStatus, errorThrown) {
+			console.log(textStatus, errorThrown);
+		}
+	});
